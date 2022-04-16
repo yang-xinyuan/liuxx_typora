@@ -72,7 +72,7 @@ http://139.24.236.89/
 
 ```shell
 $ systemctl restart docker
-$ systemctl restart daemon-reload
+$ systemctl daemon-reload 
 ```
 
 
@@ -82,6 +82,24 @@ $ systemctl restart daemon-reload
 ## 操作harbor 
 
 在harbor上建立一个仓库
+
+
+
+登录harbor
+
+```shell
+$ docker login -u admin  -p Harbor12345 139.24.236.89:80
+```
+
+
+
+
+
+## 其他问题
+
+Harbor.core 一直在starting状态
+
+解决方法：找到Harbor安装目录，执行./install  重新继续安装，它只会删除之前的镜像，数据不会丢失
 
 ## TODO
 
