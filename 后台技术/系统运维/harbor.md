@@ -57,7 +57,7 @@ http://139.24.236.89/
 
 
 
-## 配置docker私有仓库
+## 配置docker私有仓库ssh
 
 编辑`daemon.json`文件配置`insecure-registries`
 
@@ -75,9 +75,14 @@ $ systemctl restart docker
 $ systemctl daemon-reload 
 ```
 
+查看配置是否成功
 
+```she
+#查看docker info是否配置私服地址成功；
+$ docker info 
+```
 
-
+![image-20220417151046030](static/images/image-20220417151046030.png)
 
 ## 操作harbor 
 
@@ -91,6 +96,29 @@ $ systemctl daemon-reload
 $ docker login -u admin  -p Harbor12345 139.24.236.89:80
 ```
 
+给镜像打tag
+
+```shell
+# 格式 docker tag 镜像名字   ip:端口/仓库/镜像名:版本号   
+$ docker tag grafana/grafana 192.168.0.105:80/test/grafana:1.0
+```
+
+
+
+推送镜像
+
+```shell
+# 格式 docker push  ip:端口/仓库/镜像名:版本号
+$ docker push 192.168.0.105:80/test/grafana:1.0
+```
+
+拉取镜像
+
+```shell
+# 格式 docker pull ip:端口/仓库/镜像名:版本号
+$ docker pull 192.168.0.105:80/test/grafana:1.0
+```
+
 
 
 
@@ -100,6 +128,12 @@ $ docker login -u admin  -p Harbor12345 139.24.236.89:80
 Harbor.core 一直在starting状态
 
 解决方法：找到Harbor安装目录，执行./install  重新继续安装，它只会删除之前的镜像，数据不会丢失
+
+
+
+harbor推送镜像一直报443
+
+解决方法：因为push的时候 需要加端口号
 
 ## TODO
 
