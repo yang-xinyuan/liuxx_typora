@@ -99,8 +99,8 @@ $ docker login -u admin  -p Harbor12345 139.24.236.89:80
 给镜像打tag
 
 ```shell
-# 格式 docker tag 镜像名字   ip:端口/仓库/镜像名:版本号   
-$ docker tag grafana/grafana 192.168.0.105:80/test/grafana:1.0
+# 格式 docker tag 镜像名字:版本   ip:端口/仓库/镜像名:版本号   
+$ docker tag grafana/grafana:1.0 192.168.0.105:80/test/grafana:1.0
 ```
 
 
