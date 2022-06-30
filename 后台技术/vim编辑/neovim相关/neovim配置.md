@@ -24,4 +24,14 @@ git clone --depth 1 https://github.com/wbthomason/packer.nvim  "$env:LOCALAPPDAT
 
 
 
-git pull origin master
+FiraCode字体安装
+
+````shell
+mac安装 FiraCode字体
+```bash
+brew tap homebrew/cask-fonts && brew install --cask font-fira-code-nerd-font
+```
+````
+
+Iterm2 -> Preferences -> Profiles -> Text -> Non-Ascii-Font 选择 fira-code-nerd-font ,
+之后重启 Iterm2 生效
