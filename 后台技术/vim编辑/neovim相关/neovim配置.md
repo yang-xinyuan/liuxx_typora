@@ -12,5 +12,16 @@ $ ~/.config/nvim/init.vim
 
 
 
+插件管理器
+
+```shell
+# mac
+git clone --depth 1 https://github.com/wbthomason/packer.nvim\    ~/.local/share/nvim/site/pack/packer/start/packer.nvim
+ 
+# windows 
+git clone --depth 1 https://github.com/wbthomason/packer.nvim  "$env:LOCALAPPDATA\nvim-data\site\pack\packer\start\packer.nvim"
+```
 
 
+
+git pull origin master
