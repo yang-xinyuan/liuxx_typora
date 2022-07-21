@@ -96,7 +96,7 @@ show slave status;
 
 
 
-## 总揽
+## 背景
 
 mysql+Keepalived 实现高可用架构
 
@@ -106,9 +106,9 @@ mysql+Keepalived 实现高可用架构
 
 Ip:  
 
-- 172.168.0.10  
+- 139.24.236.90
 
-- 172.168.0.20
+- 139.24.236.89
 
 后续架构升级
 
@@ -180,9 +180,14 @@ $ docker run -d   -p 9000:9000  --name prtainer  --restart=always  -v /opt/porta
    - 将本地/home/bsce/dbdata/config/my.cnf 配置文件挂载到mysql镜像中，实现配置文件在宿主机管理，因为mysql官方镜像没提供vi vim以及包管理工具yum  apt-get 所以这块需要放到宿主机管理
 
 ```shell
-$ docker run -p 3307:3306 --restart=always --name mysql_uat  -v /home/bsce/dbdata/uat:/var/lib/mysql -v /home/bsce/dbdata/config/m_my.cnf:/etc/my.cnf   -e MYSQL_ROOT_PASSWORD=Bscedba2021 -d mysql:8.0.23
+# 需要将配置文件的权限放开才能在容器中使用
+# chmod 644  /home/bsce/dbdata/config/m_my.cnf
+# 挂载的路径如下
+# 数据地址/home/bsce/dbdata/data/mysqlm
+# 配置文件/home/bsce/dbdata/config/m_my.cnf
+# 其他文件/home/bsce/dbdata/mysql-files/mysqlm
+$  docker run -p 3310:3306 --restart=always --name mysql_m --privileged=true -v /home/bsce/dbdata/data/mysqlm:/var/lib/mysql -v /home/bsce/dbdata/config/m_my.cnf:/etc/mysql/my.cnf   -v /home/bsce/dbdata/mysql-files/mysqlm:/var/lib/mysql-files/  -e MYSQL_ROOT_PASSWORD=Bscedba2021 -d mysql:8.0.23    
 
-$ docker run -p 3308:3306 --restart=always --name mysql_dev  -v /home/bsce/dbdata/dev:/var/lib/mysql -v /home/bsce/dbdata/config/s_my.cnf:/etc/my.cnf   -e MYSQL_ROOT_PASSWORD=Bscedba2021 -d mysql:8.0.23
 ```
 
 
@@ -202,7 +207,7 @@ $ docker run -p 3308:3306 --restart=always --name mysql_dev  -v /home/bsce/dbdat
 第一台mysql
 
 ```mysql
-server_id=125                   # mysql唯一id，保证两台mysql配置不同值
+server_id=90                   # mysql唯一id，保证两台mysql配置不同值
 log-bin=mysql-bin               # 启用二进制日志
 auto_increment_increment=2      # 自增步长为2，双主架构设置为2
 auto_increment_offset=1         # 自增初始值，双主架构为奇偶值
@@ -211,7 +216,7 @@ auto_increment_offset=1         # 自增初始值，双主架构为奇偶值
 第二台mysql
 
 ```mysql
-server_id=126                   # mysql唯一id，保证两台mysql配置不同值
+server_id=89                   # mysql唯一id，保证两台mysql配置不同值
 log-bin=mysql-bin               # 启用二进制日志
 auto_increment_increment=2      # 自增步长为2，双主架构设置为2
 auto_increment_offset=2         # 自增初始值，双主架构为奇偶值
@@ -239,16 +244,16 @@ GRANT replication client,replication slave on *.* to 'repl'@'%'
 ```mysql
 # 在第一台主库上执行
 change master to 
-	master_host="192.168.0.108",     -- 主库的ip 
-	master_port=3307,              -- 主库的端口
+	master_host="139.24.236.90",     -- 主库的ip 
+	master_port=3310,              -- 主库的端口
 	master_user="repl",              -- 在主库中用哪个用户去复制
 	master_password="123456",        -- 用户密码
 	master_log_file="mysql-bin.000004", -- 主库的binlog文件，根据show master STATUS; 查看
 	master_log_pos=681;              -- 复制的起始位置
 # 在第二台主库上执行	
 change master to 
-   master_host="192.168.0.108",     -- 主库的ip 
-   master_port=3308,              -- 主库的端口
+   master_host="139.24.236.89",     -- 主库的ip 
+   master_port=3310,              -- 主库的端口
    master_user="repl",              -- 在主库中用哪个用户去复制
    master_password="123456",        -- 用户密码
    master_log_file="mysql-bin.000004", -- 主库的binlog文件，根据show master STATUS; 查看
@@ -271,7 +276,201 @@ start slave;
 
 ### 搭建keepalived
 
+#### 1. 安装keepalived
 
+由于我们系统是suse的，所以通过suse的官方包管理工具zypper安装的，如果你是其他系统请通过 yum  或者apt-get安装
+
+```shell
+$ zypper in  keepalived
+```
+
+#### 2. 配置keepalived的日志
+
+由于keepalived默认的日志是放在/var/log/message中，而message中有其他系统日志混杂一起，所以查看日志比较费劲
+
+所以要将keepalived的日志配置一下，让其在单独的文件下存放
+
+```shell
+# 修改/etc/rsyslog.conf，添加下面的语句
+local0.*                  /var/log/keepalived.log
+
+```
+
+然后配置keepalived参数 在/etc/sysconfig/keepalived 文件中
+
+```shell
+$ KEEPALIVED_OPTIONS="-D -d -S 0"
+# -D 表示把启动信息打印到日志记录,即我们上面配置的/var/log/keepalived.log
+# -d 详细日志
+# -S 设置本地syslog设备，编号0-7 ，这里是0
+# -f 指定加载的配置文件
+```
+
+配置完需要重启下 rsyslog与keepalived
+
+```shell
+$ systemctl restart rsyslog
+$ systemctl restart keepalived
+```
+
+
+
+#### 3. 编写配置文件
+
+##### 139.24.236.90的配置
+
+在/etc/keepalived/keepalived.conf  编写keepalived的配置文件
+
+```shell
+global_defs {                 # 全局配置
+    router_id 139.24.236.90   # 局域网唯一标识
+    script_user root          # 执行脚本的用户
+    enable_script_security    # 开启脚本安全
+}
+vrrp_script chk_mysql {       # 检测脚本
+    script "/home/bsce/keepalived/check_mysql.sh"  # 脚本路径
+    interval 2                                     # 检测间隔（多少秒内执行一次脚本）
+    weight -40                                     # 设置优先级, 根据这块动态调整vrrp优先级。规则如下
+                                                   # - 如果脚本执行结果为0，并且weight配置的值大于0，则优先级相应的增加
+                                                   # - 如果脚本执行结果非0，并且weight配置的值小于0，则优先级相应的减少
+                                                   # - 其他情况，维持原本配置的优先级，即配置文件中priority对应的值。
+}
+vrrp_instance VI_1 {          # vrrp实例定义
+    state MASTER              # 状态          ==> 状态只有MASTER和BACKUP两种，并且要大写，MASTER为工作状态，BACKUP是备用状态。
+    interface eth0            # 绑定网卡
+    virtual_router_id 100     # 虚拟路由标识  ==>同一个vrrp_instance的MASTER和BACKUP的vitrual_router_id 是一致的。
+    priority 100              # 优先级        ==> 同一个vrrp_instance的MASTER优先级必须比BACKUP高。
+    advert_int 1              # 时间间隔      ==>MASTER 与BACKUP 负载均衡器之间同步检查的时间间隔，单位为秒。
+    authentication {          # 校验配置      ==>需要MASTER和BACKUP一致才能通信
+         auth_type PASS
+         auth_pass 1111
+    }
+
+    track_script {            # 该vrrp绑定的脚本
+        chk_mysql
+    }
+    virtual_ipaddress {       # 虚拟ip  ===>对外暴露的vip，MASTER与BACKUP配置的ip保持一致
+        139.24.236.252
+    }
+}
+
+
+
+```
+
+在/home/bsce/keepalived/check_mysql.sh  编写mysql检查脚本
+
+```shell
+#!/bin/bash
+mysql=mysql_m        # 脚本要检查的mysql实例
+is_run=$(docker inspect -f '{{.State.Running}}' $mysql)
+if [ $is_run = "true" ]; then
+    echo "mysql容器运行正常"
+    counter=$(docker exec -it mysql_m  netstat -na|grep "LISTEN"|grep "3306"|wc -l)
+    echo $counter
+    if [ "${counter}" -eq 0 ]; then
+        echo "mysql运行正常"
+        exit 0
+    else
+        echo "mysql运行异常"
+        exit 1
+    fi
+else
+   echo "mysql容器运行异常"
+   exit 1
+fi
+
+```
+
+编写完之后赋权限
+
+```shell
+# 必须赋这个权限，不能赋777，因为会检查文件权限，如果权限太大，则不会读取
+$ chmod 744 check_mysql.sh
+```
+
+  然后启动
+
+```shell
+$ systemctl start keepalived
+```
+
+
+
+##### 139.24.236.89的配置
+
+在/etc/keepalived/keepalived.conf  编写keepalived的配置文件
+
+```shell
+
+
+global_defs {                   # 全局配置
+    router_id 139.24.236.89     # 局域网唯一标识
+    script_user root            # 执行脚本的用户
+    enable_script_security      # 开启脚本安全
+}
+
+vrrp_script chk_mysql {                               # 检测脚本
+    script "/home/bsce/keepalived/check_mysql.sh"     # 脚本路径
+    interval 2                                        # 检测间隔（多少秒内执行一次脚本）
+    weight -20                                        # 设置优先级, 根据这块动态调整vrrp优先级。规则如下
+                                                      # - 如果脚本执行结果为0，并且weight配置的值大于0，则优先级相应的增加
+                                                      # - 如果脚本执行结果非0，并且weight配置的值小于0，则优先级相应的减少
+                                                      # - 其他情况，维持原本配置的优先级，即配置文件中priority对应的值。
+}
+vrrp_instance VI_1 {            # vrrp实例定义
+    state BACKUP                # 状态          ==> 状态只有MASTER和BACKUP两种，并且要大写，MASTER为工作状态，BACKUP是备用状态。
+    interface eth0              # 绑定网卡
+    virtual_router_id 100       # 虚拟路由标识  ==>同一个vrrp_instance的MASTER和BACKUP的vitrual_router_id 是一致的。
+    priority 90                 # 优先级        ==> 同一个vrrp_instance的MASTER优先级必须比BACKUP高。
+    advert_int 1                # 时间间隔      ==>MASTER 与BACKUP 负载均衡器之间同步检查的时间间隔，单位为秒。
+    authentication {            # 校验配置      ==>需要MASTER和BACKUP一致才能通信
+        auth_type PASS
+        auth_pass 1111
+    }
+    track_script {              # 该vrrp绑定的脚本
+        chk_mysql
+    }
+    virtual_ipaddress {         # 虚拟ip  ===>对外暴露的vip，MASTER与BACKUP配置的ip保持一致
+        139.24.236.252
+    }
+}
+
+
+```
+
+在/home/bsce/keepalived/check_mysql.sh  编写mysql检查脚本
+
+```shell
+#!/bin/bash
+slave_is=( $(docker exec -it mysql_m  mysql  -uroot -pBscedba2021  -e "show slave status\G"  | grep "Slave_.*_Running" | awk '{print $2}') )
+io_status=`echo ${slave_is[0]} |tr -d '\n\r'`
+sql_status=`echo ${slave_is[1]} |tr -d '\n\r'`
+
+echo $io_status 
+echo $sql_status 
+if [ $io_status =  "Yes" -a $sql_status = "Yes" ]; then
+    echo "主库连接正常"
+    exit 1
+else
+    echo "主库连接异常，切换backup库"
+    exit 0
+fi
+
+```
+
+编写完之后赋权限
+
+```shell
+# 必须赋这个权限，不能赋777，因为会检查文件权限，如果权限太大，则不会读取
+$ chmod 744 check_mysql.sh
+```
+
+然后启动
+
+```shell
+$ systemctl start keepalived
+```
 
 
 
@@ -308,8 +507,13 @@ $ systemctl start NetworkManager.service
 
 ```
 
+mysql镜像常用工具安装
 
-
-- 查看所有网桥 docker network ls
-
-- 查看某网桥的配置信息 docker network inspect [网桥id或者名称]
+```shell
+apt-get update
+apt-get -y install systemd     #systemctl 命令安装
+apt-get -y  install procps     # ps 
+apt-get -y install net-tools   #netstat
+apt-get -y  install iputils-ping  #ping
+apt-get -y  install vim 
+```
